@@ -1,0 +1,148 @@
+---
+title: "Mutual-Funds-Analysis"
+author: "Lianna Novitz"
+date: "4/16/2018"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2) # Data visualization
+library(readr) # CSV file I/O, e.g. the read_csv function
+library(gridExtra)
+library(GGally) 
+library(leaps) 
+library(glmnet)
+```
+
+```{r}
+Experience <- read_csv("/Users/lnovitz/Documents/Lianna's Projects/Git/R/Mutual-Funds-Kaggle-Data/mutual-funds/Experience.csv")
+```
+Data Exploration: Quick Look
+```{r}
+head(Experience)
+summary(Experience)
+names(Experience)
+colnames(Experience)
+colnames(Experience)[2] <- "Morningstar_Category"
+colnames(Experience)[22] <- "Net_Flows"
+```
+
+Data Exploration: Counts
+```{r}
+Experience %>%
+  group_by(Morningstar_Category) %>%
+  count() %>% 
+  arrange(desc(n))
+```
+Data Exploration: Visualization
+```{r}
+#ggplots
+Experience %>% 
+  select(c(1:22)) %>% #select 1:9 = the variables. always include predictor!
+  ggpairs()
+```
+
+```{r}
+#histogram
+ggplot(Experience, 
+       aes(x=Net_Flows)) +
+  geom_histogram()
+```
+```{r}
+#density plot
+Experience %>%
+ggplot(aes(x=Net_Flows)) +
+  geom_density()
+```
+```{r}
+#relationship btwn 2 vars
+ggplot(Experience, 
+       aes(y=Net_Flows, x=Investment)) +
+  geom_point() +
+  geom_smooth(method="lm")
+```
+#another density plot
+```{r}
+Experience %>% 
+  ggplot(aes(x=Net_Flows, fill=factor(Investment))) +
+  geom_density(alpha=.5)
+```
+
+#boxplot
+```{r}
+Experience %>% 
+  ggplot(aes(x=factor(Investment), y='Net Flow')) +
+  geom_boxplot()
+```
+
+#name a plot
+garareaP <-
+house_data %>% 
+  ggplot(aes(x=GarageArea, y=SalePrice)) +
+  geom_point()
+
+#arrange plots
+grid.arrange(qualP, buildyearP, remodyearP, bsmtsfP, airP, electricP, firstflrsfP, grlivareaP, bathP, rmsabvgrdP, garcarsP, garareaP,  ncol = 4, newpage = TRUE)
+
+
+Linear Model
+```{r}
+#fit the model
+model_1 <- lm(NetFlow ~ Investment, data = Experience)
+#obtain a model summary
+summary(model_1)
+```
+
+Logistic Model (binary response)
+```{r}
+log.big <- glm(Class ~ Adhes + BNucl + Chrom + Thick,
+               data=wbca, family = binomial(link = "logit"))
+summary(log.big)
+predict(log.big, type = "response", 
+        newdata = data.frame(Adhes=2, BNucl=2, Chrom = 2, Thick = 2))
+```
+
+Validation/Training
+```{r}
+set.seed(399)
+
+House.subset <- 
+  newhouse_data %>% 
+  mutate(grp = sample(0:1, 
+                      size=n(), 
+                      replace=TRUE))
+
+training <- House.subset %>% filter(grp == 0)
+validation <- House.subset %>% filter(grp == 1)
+```
+
+Forward Selection and Cross Validation
+```{r}
+bestmods <- regsubsets(x = SalePrice ~ OverallQual + YearBuilt + YearRemodAdd + TotalBsmtSF + CentralAir + factor(Electrical) + FirstFlrSF + GrLivArea + factor(FullBath) + factor(TotRmsAbvGrd) + factor(GarageCars) + GarageArea,             
+                   data = training %>% 
+                     select(-grp),     
+                   nvmax = 11,          
+                   method = "forward") 
+```
+
+```{r}
+predict.regsubsets <- function(object, newdata, id, ...){
+  form <- as.formula(object$call[[2]])
+  coefi <- coef(object, id=id)
+  model.matrix(form, data=newdata)[,names(coefi)] %*% coefi
+}
+```
+
+```{r}
+vars = 12
+mspeall = c()
+for (i in 1:vars){
+predict.regsubsets(object = bestmods, 
+                   newdata = validation,
+                   id = i)
+mspeall[1] = actual - pred  
+}
+  
+```
